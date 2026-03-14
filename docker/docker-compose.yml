@@ -1,0 +1,33 @@
+version: '3.8'
+
+services:
+  cross-compile:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: mechanicsdsl-embedded:latest
+    volumes:
+      - ..:/workspace
+    working_dir: /workspace
+    command: >
+      bash -c "
+        mkdir -p build_arm && cd build_arm &&
+        cmake .. -DCMAKE_BUILD_TYPE=Release
+                 -DCMAKE_TOOLCHAIN_FILE=/workspace/cmake/arm-toolchain.cmake &&
+        make -j$(nproc) &&
+        echo 'ARM build complete. Binaries in build_arm/'"
+
+  generate:
+    image: mechanicsdsl-embedded:latest
+    volumes:
+      - ..:/workspace
+    working_dir: /workspace
+    command: >
+      bash -c "
+        python3 -c '
+        from mechanics_dsl import PhysicsCompiler
+        c = PhysicsCompiler()
+        c.compile_file(\"examples/arduino_pendulum/pendulum.msl\")
+        c.compile_to_cpp(\"examples/arduino_pendulum/generated.cpp\", target=\"arduino\")
+        print(\"Code generation complete.\")
+        '"
