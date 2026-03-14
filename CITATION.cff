@@ -1,0 +1,23 @@
+cff-version: 1.2.0
+message: "If you use this software in your research, please cite:"
+type: software
+title: "MechanicsDSL Embedded"
+abstract: >
+  Embedded and edge deployment for MechanicsDSL simulations.
+  Generates optimised C++ and no_std Rust for Arduino, Raspberry Pi,
+  and ARM platforms with real-time scheduling and IMU integration.
+authors:
+  - family-names: Parsons
+    given-names: Noah
+    orcid: "https://orcid.org/0009-0000-7224-6040"
+    affiliation: "American Forge Institute & Eastern Wyoming College"
+repository-code: "https://github.com/MechanicsDSL/mechanicsdsl-embedded"
+license: MIT
+date-released: "2026-03-13"
+references:
+  - type: software
+    title: "MechanicsDSL"
+    doi: "10.5281/zenodo.17771040"
+    authors:
+      - family-names: Parsons
+        given-names: Noah
