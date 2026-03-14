@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/status-planned-lightgrey" alt="Status: Planned">
+  <img src="https://img.shields.io/badge/status-active-green" alt="Active">
   <img src="https://img.shields.io/badge/targets-Arduino%20%7C%20RPi%20%7C%20ARM-blue" alt="Targets">
   <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="MIT License"></a>
   <a href="https://github.com/MechanicsDSL/mechanicsdsl"><img src="https://img.shields.io/badge/core-mechanicsdsl-blue" alt="Core Package"></a>
@@ -19,61 +19,118 @@
 
 ## Overview
 
-`mechanicsdsl-embedded` extends the MechanicsDSL compiler toolchain to embedded and edge platforms. Write your physical system once in DSL notation; generate optimized, dependency-free C++ or `no_std` Rust ready to flash to a microcontroller or deploy to a Raspberry Pi.
+`mechanicsdsl-embedded` provides deployment infrastructure and examples for running MechanicsDSL-generated simulations on embedded and edge platforms. Write your physical system once in DSL notation; generate optimized, dependency-free C++ or `no_std` Rust ready to flash or deploy.
 
-This repository targets closed-loop control applications, real-time robotics, science fair hardware builds, and any scenario where simulation needs to run on the device — not in the cloud.
-
----
-
-## Planned Capabilities
-
-### Code Generation
-- **Arduino C++** — Single-file `.ino` output with no heap allocation, fixed-point arithmetic options, and serial logging hooks
-- **Raspberry Pi C++** — CMake projects with pigpio integration, real-time scheduling support, and GPIO output for actuator control
-- **ARM / NEON** — Auto-detected SIMD intrinsics for Cortex-A series; cross-compilation toolchain configurations included
-- **`no_std` Rust** — Microcontroller targets via `embedded-hal`; Cargo project scaffolding with Embassy async runtime support
-
-### Sensor Integration
-- **IMU fusion** — MPU6050, BNO055, and ICM-42688 examples with complementary and Kalman filter state estimation
-- **Encoder feedback** — Quadrature encoder reading with velocity estimation for pendulum and motor control examples
-- **Serial telemetry** — Structured output for real-time logging and visualization over USB/UART
-
-### Example Projects
-- Real-time inverted pendulum stabilization on Raspberry Pi
-- Double pendulum chaos demonstration with LED visualization on Arduino
-- IMU-driven rigid body orientation estimation
-- Coupled oscillator parameter estimation from sensor data
+All examples originate from MechanicsDSL DSL specifications — the originating spec is included as a comment in every generated source file.
 
 ---
 
-## Relationship to Core Package
+## Examples
 
-This repository provides deployment infrastructure and examples. The symbolic derivation, constraint handling, and code generation engine lives in [mechanicsdsl](https://github.com/MechanicsDSL/mechanicsdsl). Install the core package to generate embedded targets:
+### Arduino
 
-```bash
-pip install mechanicsdsl-core[embedded]
+| Example | System | Rate | Hardware |
+|---------|--------|------|----------|
+| [`arduino_pendulum/`](examples/arduino_pendulum/) | Simple pendulum + MPU6050 IMU | 250 Hz | Arduino Uno |
+| [`arduino_double_pendulum/`](examples/arduino_double_pendulum/) | Double pendulum (chaotic) | 200 Hz | Arduino Mega 2560 |
+
+### Raspberry Pi
+
+| Example | System | Rate | Features |
+|---------|--------|------|---------|
+| [`raspberry_pi_pendulum/`](examples/raspberry_pi_pendulum/) | Simple pendulum | 250 Hz | pigpio, POSIX RT scheduling, NEON, GPIO energy alert |
+| [`raspberry_pi_double_pendulum/`](examples/raspberry_pi_double_pendulum/) | Double pendulum | 200 Hz | pigpio, POSIX RT scheduling, GPIO energy alert |
+
+---
+
+## Repository Structure
+
+```
+mechanicsdsl-embedded/
+├── examples/
+│   ├── arduino_pendulum/          .ino + README
+│   ├── arduino_double_pendulum/   .ino + README
+│   ├── raspberry_pi_pendulum/     .cpp + README
+│   └── raspberry_pi_double_pendulum/ .cpp + README
+├── cmake/
+│   └── arm-toolchain.cmake        ARM cross-compilation toolchain
+├── docker/
+│   ├── Dockerfile                 ARM cross-compilation environment
+│   └── docker-compose.yml
+├── scripts/
+│   ├── cross_compile_arm.sh       One-command ARM build via Docker
+│   └── monitor_serial.py          Real-time serial CSV plotter
+├── docs/
+│   ├── getting_started.md
+│   └── hardware_guide.md          Wiring, platform support, performance notes
+└── tests/
+    └── test_eom.py                Physics correctness via SciPy reference
 ```
 
 ---
 
-## Status
+## Quick Start
 
-This repository is in the planning stage. Development will begin following stabilization of the embedded code generation backends in the core package. Watch this repository or the [core repo](https://github.com/MechanicsDSL/mechanicsdsl) for updates.
+### Arduino
+
+1. Open `examples/arduino_pendulum/pendulum_realtime.ino` in Arduino IDE
+2. Select board and port → Upload
+3. Open Serial Monitor at 115200 baud
+
+### Raspberry Pi
+
+```bash
+sudo apt-get install pigpio libpigpio-dev cmake g++
+mkdir build && cd build
+cmake .. -DCMAKE_BUILD_TYPE=Release
+make -j$(nproc)
+sudo ./pendulum_rpi
+```
+
+### ARM Cross-Compilation (from x86 host)
+
+```bash
+./scripts/cross_compile_arm.sh
+scp build_arm/pendulum_rpi pi@<ip>:~/
+ssh pi@<ip> "sudo ~/pendulum_rpi"
+```
+
+### Real-Time Serial Monitor
+
+```bash
+pip install pyserial matplotlib numpy
+python scripts/monitor_serial.py --port /dev/ttyUSB0
+```
+
+---
+
+## Testing (no hardware required)
+
+```bash
+pip install pytest numpy scipy
+pytest tests/ -v
+```
+
+Physics correctness is validated against SciPy reference integrations — period accuracy, energy conservation, equilibrium stability.
+
+---
+
+## Code Generation
+
+All examples can be regenerated from DSL specifications:
+
+```bash
+pip install mechanicsdsl-core[embedded]
+mechanicsdsl generate pendulum.msl --target arduino
+mechanicsdsl generate pendulum.msl --target raspberry_pi
+```
 
 ---
 
 ## Contributing
 
-Contributions welcome — particularly from those with embedded hardware experience. See [CONTRIBUTING.md](https://github.com/MechanicsDSL/mechanicsdsl/blob/main/CONTRIBUTING.md) for guidelines.
+See [CONTRIBUTING.md](CONTRIBUTING.md). Hardware validation on new platforms especially welcome.
 
 ## License
 
-MIT License — see [LICENSE](LICENSE) for details.
-
----
-
-<p align="center">
-  <a href="https://github.com/MechanicsDSL/mechanicsdsl">Core Package</a> ·
-  <a href="https://mechanicsdsl.readthedocs.io">Documentation</a> ·
-  <a href="https://doi.org/10.5281/zenodo.17771040">Zenodo DOI</a>
-</p>
+MIT License — see [LICENSE](LICENSE).
