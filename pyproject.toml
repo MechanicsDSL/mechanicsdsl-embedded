@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "mechanicsdsl-embedded"
-version = "0.1.0"
+version = "0.1.1"
 description = "Embedded deployment tools and examples for MechanicsDSL — Arduino, Raspberry Pi, and ARM"
 readme = "README.md"
 license = { text = "MIT" }
