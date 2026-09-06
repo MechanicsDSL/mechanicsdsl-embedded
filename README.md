@@ -19,7 +19,7 @@
 
 `mechanicsdsl-embedded` provides deployment infrastructure and examples for running MechanicsDSL-generated simulations on embedded and edge platforms. Write your physical system once in DSL notation; generate optimized, dependency-free C++ or `no_std` Rust ready to flash or deploy.
 
-All examples originate from MechanicsDSL DSL specifications — the originating spec is included as a comment in every generated source file.
+All examples originate from MechanicsDSL DSL specifications, the originating spec is included as a comment in every generated source file.
 
 ---
 
@@ -109,7 +109,7 @@ pip install pytest numpy scipy
 pytest tests/ -v
 ```
 
-Physics correctness is validated against SciPy reference integrations — period accuracy, energy conservation, equilibrium stability.
+Physics correctness is validated against SciPy reference integrations, period accuracy, energy conservation, equilibrium stability.
 
 ---
 
@@ -131,4 +131,4 @@ See [CONTRIBUTING.md](CONTRIBUTING.md). Hardware validation on new platforms esp
 
 ## License
 
-MIT License — see [LICENSE](LICENSE).
+MIT License; see [LICENSE](LICENSE).
