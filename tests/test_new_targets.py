@@ -10,6 +10,7 @@ expressions are evaluated through a literal translation to Python, and the
 crate is built with ``cargo test`` when cargo is available.
 """
 import json
+import os
 import math
 import random
 import re
@@ -150,8 +151,10 @@ def test_rust_crate_is_no_std(tmp_path):
 def test_rust_crate_builds_and_tests(tmp_path):
     assert cli_main(["generate", "double_pendulum", "-t", "rust_no_std",
                      "-o", str(tmp_path)]) == 0
-    subprocess.run(["cargo", "test", "--quiet"], cwd=tmp_path / "double_pendulum_dynamics",
-                   check=True, capture_output=True, text=True, timeout=600)
+    r = subprocess.run(["cargo", "test", "--quiet"], cwd=tmp_path / "double_pendulum_dynamics",
+                       capture_output=True, text=True, timeout=600,
+                       env={**os.environ, "RUSTFLAGS": "-D warnings"})
+    assert r.returncode == 0, r.stdout[-3000:] + r.stderr[-3000:]
 
 
 # ----------------------------------------------------------------- tools ---
