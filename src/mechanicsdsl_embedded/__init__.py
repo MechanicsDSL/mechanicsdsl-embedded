@@ -18,8 +18,22 @@ import sys
 
 from mechanicsdsl_embedded._version import __version__
 from mechanicsdsl_embedded._targets import list_targets, get_example_path
+from mechanicsdsl_embedded._bridge import (
+    CompiledSystem,
+    CoreNotInstalled,
+    DSLCompileError,
+    compile_spec,
+)
 
-__all__ = ["__version__", "list_targets", "get_example_path"]
+__all__ = [
+    "__version__",
+    "list_targets",
+    "get_example_path",
+    "compile_spec",
+    "CompiledSystem",
+    "CoreNotInstalled",
+    "DSLCompileError",
+]
 
 
 def _show_survey_banner():
