@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "mechanicsdsl-embedded"
-version = "0.1.1"
+dynamic = ["version"]
 description = "Embedded deployment tools and examples for MechanicsDSL — Arduino, Raspberry Pi, and ARM"
 readme = "README.md"
 license = { text = "MIT" }
@@ -30,13 +30,13 @@ classifiers = [
 ]
 requires-python = ">=3.9"
 dependencies = [
-  "mechanicsdsl-core",
+  "mechanicsdsl-core>=2.1.4",
   "numpy>=1.24",
 ]
 
 [project.optional-dependencies]
 serial = ["pyserial", "matplotlib"]
-dev = ["pytest>=7.0", "scipy", "ruff"]
+dev = ["pytest>=7.0", "pytest-cov", "scipy", "ruff"]
 
 [project.scripts]
 mechanicsdsl-embed = "mechanicsdsl_embedded.cli:main"
@@ -45,6 +45,9 @@ mechanicsdsl-embed = "mechanicsdsl_embedded.cli:main"
 Homepage = "https://github.com/MechanicsDSL/mechanicsdsl-embedded"
 Repository = "https://github.com/MechanicsDSL/mechanicsdsl-embedded"
 DOI = "https://doi.org/10.5281/zenodo.17771040"
+
+[tool.hatch.version]
+path = "src/mechanicsdsl_embedded/_version.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/mechanicsdsl_embedded"]

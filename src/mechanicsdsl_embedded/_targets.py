@@ -25,6 +25,16 @@ _TARGETS: Dict[str, Dict] = {
         "output_ext": ".cpp",
         "examples": [],
     },
+    "c_header": {
+        "description": "Portable single-header C99, any MCU (--precision float|double)",
+        "output_ext": ".h",
+        "examples": [],
+    },
+    "rust_no_std": {
+        "description": "#![no_std] Rust crate on libm (Cortex-M, RISC-V, ...)",
+        "output_ext": "_dynamics/",
+        "examples": [],
+    },
 }
 
 
@@ -54,7 +64,7 @@ def get_example_path(target: str, example: str) -> Optional[Path]:
     ex_dir = pkg_dir / "examples" / example
     if ex_dir.exists():
         return ex_dir
-    repo_root = pkg_dir.parent.parent.parent.parent
+    repo_root = pkg_dir.parent.parent
     local = repo_root / "examples" / example
     if local.exists():
         return local

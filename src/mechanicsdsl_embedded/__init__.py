@@ -8,6 +8,8 @@ Quick start:
     pip install mechanicsdsl-embedded
     mechanicsdsl-embed generate pendulum.msl --target arduino
     mechanicsdsl-embed generate pendulum.msl --target raspberry_pi
+    mechanicsdsl-embed generate pendulum.msl --target c_header --precision float
+    mechanicsdsl-embed generate pendulum.msl --target rust_no_std
 
     # Examples and documentation:
     # https://github.com/MechanicsDSL/mechanicsdsl-embedded
@@ -23,13 +25,31 @@ from mechanicsdsl_embedded._bridge import (
     CoreNotInstalled,
     DSLCompileError,
     compile_spec,
+    energy_drift,
+    list_presets,
+    numeric_energy,
+    numeric_rhs,
+    operation_count,
+    simulate,
 )
+from mechanicsdsl_embedded._cgen import render_c_header
+from mechanicsdsl_embedded._rustgen import expr_to_rust, render_lib_rs, write_crate
 
 __all__ = [
     "__version__",
     "list_targets",
     "get_example_path",
     "compile_spec",
+    "list_presets",
+    "simulate",
+    "numeric_rhs",
+    "numeric_energy",
+    "energy_drift",
+    "operation_count",
+    "render_c_header",
+    "expr_to_rust",
+    "render_lib_rs",
+    "write_crate",
     "CompiledSystem",
     "CoreNotInstalled",
     "DSLCompileError",

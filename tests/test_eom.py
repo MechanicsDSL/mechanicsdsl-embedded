@@ -77,20 +77,21 @@ class TestDoublePendulumEOM:
                               rtol=1e-12, atol=1e-14)
         assert np.allclose(s1["y"], s2["y"])
 
-    @pytest.mark.xfail(
-        reason="core's derived double-pendulum EOM does not conserve the "
-        "energy of its own Lagrangian (identical drift under DOP853 and RK45, "
-        "so not integrator error). Tracked as a core bug; core is frozen here.",
-        strict=True,
-    )
     def test_energy_conservation(self):
-        """Documents the expected (and currently violated) invariant."""
+        """Core's double-pendulum EOM conserves the energy of its Lagrangian.
+
+        This was an xfail until 0.2.0 because it read ``sol["y"]`` as
+        ``[th1, th2, w1, w2]``. Core actually returns the state interleaved as
+        ``[theta1, theta1_dot, theta2, theta2_dot]`` (``sol["state_vars"]``),
+        so the "drift" was the energy of a mislabelled state, not a core bug.
+        """
         c, p, sol = _simulate("double_pendulum", 10.0, 20001, method="DOP853",
                               rtol=1e-12, atol=1e-14)
         m1, m2 = p["m1"], p["m2"]
         l1, l2, g = p["l1"], p["l2"], p["g"]
-        th1, th2 = sol["y"][0], sol["y"][1]
-        w1, w2 = sol["y"][2], sol["y"][3]
+        sv = list(sol["state_vars"])
+        th1, th2 = sol["y"][sv.index("theta1")], sol["y"][sv.index("theta2")]
+        w1, w2 = sol["y"][sv.index("theta1_dot")], sol["y"][sv.index("theta2_dot")]
         T = (0.5 * (m1 + m2) * l1**2 * w1**2
              + 0.5 * m2 * l2**2 * w2**2
              + m2 * l1 * l2 * w1 * w2 * np.cos(th1 - th2))

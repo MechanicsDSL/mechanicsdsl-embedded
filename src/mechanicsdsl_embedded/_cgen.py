@@ -1,0 +1,209 @@
+"""
+_cgen.py
+--------
+Portable single-header C99 generator.
+
+Emits one ``<system>.h`` file with no dependencies beyond ``<math.h>`` that
+runs on anything with a C99 compiler: AVR, Cortex-M, ESP32, RISC-V, desktop.
+The header provides
+
+* ``<sys>_params_t`` and ``<sys>_default_params()``,
+* ``<sys>_initial_state(y)``,
+* ``<sys>_accel(q, qd, p, qdd)`` printed from the symbolic EOM with common
+  subexpression elimination,
+* ``<sys>_deriv(y, p, dydt)`` and ``<sys>_rk4_step(y, dt, p)``,
+* ``<sys>_energy(y, p)`` when the system has a Lagrangian.
+
+``precision="float"`` switches every type, literal and libm call to single
+precision (``sinf``, ``1.0F`` ...), which matters on FPU-less or
+single-precision-FPU microcontrollers where ``double`` is emulated in software.
+
+All internal identifiers carry an ``mdsl_`` prefix so they can never collide
+with a user's coordinate or parameter names (a coordinate called ``y`` or a
+parameter called ``p`` is legal DSL).
+"""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, List, Tuple
+
+import sympy as sp
+from sympy.codegen.ast import float32, float64, real
+from sympy.printing.c import C99CodePrinter
+
+if TYPE_CHECKING:
+    from ._bridge import CompiledSystem
+
+
+def _printer(precision: str) -> C99CodePrinter:
+    if precision not in ("float", "double"):
+        raise ValueError("precision must be 'float' or 'double'")
+    alias = float32 if precision == "float" else float64
+    return C99CodePrinter({"type_aliases": {real: alias}})
+
+
+def _cse_block(exprs: List["sp.Expr"], printer, ctype: str
+               ) -> Tuple[List[str], List[str]]:
+    temps, reduced = sp.cse(exprs, symbols=sp.numbered_symbols("mdsl_t"))
+    lines = [f"    const {ctype} {sym} = {printer.doprint(val)};" for sym, val in temps]
+    return lines, [printer.doprint(e) for e in reduced]
+
+
+def _unpack(system: "CompiledSystem", ct: str, used: set, *, q: str, qd: str
+            ) -> List[str]:
+    """Locals named after DSL symbols, so printed expressions compile verbatim."""
+    lines = []
+    for i, c in enumerate(system.coordinates):
+        if c in used:
+            lines.append(f"    const {ct} {c} = {q}[{i}];")
+        if f"{c}_dot" in used:
+            lines.append(f"    const {ct} {c}_dot = {qd}[{i}];")
+    for p in sorted(system.parameters):
+        if p in used:
+            lines.append(f"    const {ct} {p} = mdsl_p->{p};")
+    return lines
+
+
+def render_c_header(system: "CompiledSystem", precision: str = "double") -> str:
+    """Render a self-contained C99 header for ``system``."""
+    pr = _printer(precision)
+    ct = precision
+    sysn = system.name
+    up = sysn.upper()
+    n = system.dof
+    D = system.state_dim
+    params = sorted(system.parameters)
+
+    def lit(v: float) -> str:
+        return pr.doprint(sp.Float(v))
+
+    fields = "\n".join(
+        (f"    {ct} {p};  /* {system.units[p]} */" if system.units.get(p)
+         else f"    {ct} {p};")
+        for p in params
+    ) or f"    {ct} mdsl_unused;"
+    defaults = ", ".join(lit(system.parameters[p]) for p in params) or lit(0.0)
+    init = "\n".join(
+        f"    mdsl_y[{i}] = {lit(v)};  /* {s} */"
+        for i, (s, v) in enumerate(zip(system.state_names, system.initial_state()))
+    )
+
+    accel_exprs = [system.equations[f"{c}_ddot"] for c in system.coordinates]
+    used = set()
+    for e in accel_exprs:
+        used |= {str(s) for s in e.free_symbols}
+    unpack = _unpack(system, ct, used, q="mdsl_q", qd="mdsl_qd")
+    voids = []
+    if not any(c in used for c in system.coordinates):
+        voids.append("    (void)mdsl_q;")
+    if not any(f"{c}_dot" in used for c in system.coordinates):
+        voids.append("    (void)mdsl_qd;")
+    if not any(p in used for p in params):
+        voids.append("    (void)mdsl_p;")
+    temps, accel = _cse_block(accel_exprs, pr, ct)
+    accel_lines = [f"    mdsl_qdd[{i}] = {a};" for i, a in enumerate(accel)]
+    accel_body = "\n".join(unpack + voids + temps + accel_lines)
+
+    energy_fn = ""
+    if system.energy is not None:
+        e_used = {str(s) for s in system.energy.free_symbols}
+        e_lines = _unpack(system, ct, e_used, q="mdsl_y", qd=f"(mdsl_y + {n})")
+        if not any(p in e_used for p in params):
+            e_lines.append("    (void)mdsl_p;")
+        if not any(c in e_used or f"{c}_dot" in e_used for c in system.coordinates):
+            e_lines.append("    (void)mdsl_y;")
+        e_temps, (e_expr,) = _cse_block([system.energy], pr, ct)
+        energy_fn = f"""
+/* Jacobi energy E = sum(qdot * dL/dqdot) - L. Conserved for conservative
+   systems, so its drift is a direct measure of integration error. */
+static inline {ct} {sysn}_energy(const {ct} *mdsl_y, const {sysn}_params_t *mdsl_p) {{
+{chr(10).join(e_lines + e_temps)}
+    return {e_expr};
+}}
+"""
+
+    src_comment = "\n".join(f" *   {ln}" for ln in system.source.splitlines())
+    half, sixth, two = lit(0.5), lit(1.0 / 6.0), lit(2.0)
+    return f"""\
+/*
+ * {sysn}.h - auto-generated by mechanicsdsl-embedded. DO NOT EDIT BY HAND.
+ *
+ * Portable C99, {precision} precision, no dependencies beyond <math.h>.
+ * Equations of motion derived by mechanicsdsl-core from:
+ *
+{src_comment}
+ *
+ * Usage:
+ *   {sysn}_params_t p = {sysn}_default_params();
+ *   {ct} y[{up}_STATE_DIM];
+ *   {sysn}_initial_state(y);
+ *   for (;;) {{ {sysn}_rk4_step(y, dt, &p); }}
+ */
+#ifndef MECHANICSDSL_{up}_H
+#define MECHANICSDSL_{up}_H
+
+#include <math.h>
+
+#ifdef __cplusplus
+extern "C" {{
+#endif
+
+#define {up}_DOF {n}
+#define {up}_STATE_DIM {D}
+
+typedef struct {{
+{fields}
+}} {sysn}_params_t;
+
+static inline {sysn}_params_t {sysn}_default_params(void) {{
+    {sysn}_params_t mdsl_p = {{ {defaults} }};
+    return mdsl_p;
+}}
+
+/* State layout: [{", ".join(system.state_names)}] */
+static inline void {sysn}_initial_state({ct} *mdsl_y) {{
+{init}
+}}
+
+static inline void {sysn}_accel(const {ct} *mdsl_q, const {ct} *mdsl_qd,
+                                const {sysn}_params_t *mdsl_p, {ct} *mdsl_qdd) {{
+{accel_body}
+}}
+
+static inline void {sysn}_deriv(const {ct} *mdsl_y, const {sysn}_params_t *mdsl_p,
+                                {ct} *mdsl_dydt) {{
+    {ct} mdsl_qdd[{n}];
+    int mdsl_i;
+    {sysn}_accel(mdsl_y, mdsl_y + {n}, mdsl_p, mdsl_qdd);
+    for (mdsl_i = 0; mdsl_i < {n}; ++mdsl_i) {{
+        mdsl_dydt[mdsl_i] = mdsl_y[{n} + mdsl_i];
+        mdsl_dydt[{n} + mdsl_i] = mdsl_qdd[mdsl_i];
+    }}
+}}
+
+/* One classic fixed-step RK4 step, in place. */
+static inline void {sysn}_rk4_step({ct} *mdsl_y, {ct} mdsl_dt,
+                                   const {sysn}_params_t *mdsl_p) {{
+    {ct} mdsl_k1[{D}], mdsl_k2[{D}], mdsl_k3[{D}], mdsl_k4[{D}], mdsl_tmp[{D}];
+    int mdsl_i;
+    {sysn}_deriv(mdsl_y, mdsl_p, mdsl_k1);
+    for (mdsl_i = 0; mdsl_i < {D}; ++mdsl_i)
+        mdsl_tmp[mdsl_i] = mdsl_y[mdsl_i] + {half} * mdsl_dt * mdsl_k1[mdsl_i];
+    {sysn}_deriv(mdsl_tmp, mdsl_p, mdsl_k2);
+    for (mdsl_i = 0; mdsl_i < {D}; ++mdsl_i)
+        mdsl_tmp[mdsl_i] = mdsl_y[mdsl_i] + {half} * mdsl_dt * mdsl_k2[mdsl_i];
+    {sysn}_deriv(mdsl_tmp, mdsl_p, mdsl_k3);
+    for (mdsl_i = 0; mdsl_i < {D}; ++mdsl_i)
+        mdsl_tmp[mdsl_i] = mdsl_y[mdsl_i] + mdsl_dt * mdsl_k3[mdsl_i];
+    {sysn}_deriv(mdsl_tmp, mdsl_p, mdsl_k4);
+    for (mdsl_i = 0; mdsl_i < {D}; ++mdsl_i)
+        mdsl_y[mdsl_i] += mdsl_dt * {sixth} * (mdsl_k1[mdsl_i] + {two} * mdsl_k2[mdsl_i]
+                          + {two} * mdsl_k3[mdsl_i] + mdsl_k4[mdsl_i]);
+}}
+{energy_fn}
+#ifdef __cplusplus
+}}
+#endif
+
+#endif /* MECHANICSDSL_{up}_H */
+"""

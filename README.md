@@ -115,13 +115,47 @@ Physics correctness is validated against SciPy reference integrations, period ac
 
 ## Code Generation
 
-All examples can be regenerated from DSL specifications:
+`mechanicsdsl-embed` compiles any `.msl` spec (or core preset) through
+`mechanicsdsl-core` and emits source for the chosen target:
 
 ```bash
-pip install mechanicsdsl-core[embedded]
-mechanicsdsl generate pendulum.msl --target arduino
-mechanicsdsl generate pendulum.msl --target raspberry_pi
+pip install mechanicsdsl-embedded
+mechanicsdsl-embed targets
+mechanicsdsl-embed generate pendulum --target arduino -o build/
+mechanicsdsl-embed generate pendulum --target raspberry_pi -o build/
+mechanicsdsl-embed generate my_system.msl --target c_header --precision float -o build/
+mechanicsdsl-embed generate double_pendulum --target rust_no_std -o crates/
 ```
+
+| Target | Output | Notes |
+|--------|--------|-------|
+| `arduino` | `.ino` sketch | core `ArduinoGenerator`, serial plotter output |
+| `raspberry_pi` | `.cpp` | core `ARMGenerator`, NEON |
+| `arm_bare` | `.cpp` | core `ARMGenerator`, Cortex-M, no OS |
+| `c_header` | single `.h` | portable C99, `float` or `double`, RK4 + energy, CSE-optimised; works on any MCU |
+| `rust_no_std` | Cargo crate | `#![no_std]`, no allocator, `libm` only; Cortex-M / RISC-V |
+
+### Before you flash: inspect, budget, verify
+
+```bash
+mechanicsdsl-embed inspect double_pendulum                      # coordinates, parameters, EOM, energy
+mechanicsdsl-embed budget double_pendulum --rate 1000 --mflops 20   # ops/step, MFLOP/s needed, RAM
+mechanicsdsl-embed verify double_pendulum --dt 0.001 --duration 10  # RK4 energy drift at your dt
+```
+
+`budget` counts floating-point operations after common-subexpression
+elimination, which is what the generated code actually executes. `verify`
+integrates with the same fixed-step RK4 the generated code uses and fails
+(exit code 4) if energy drift exceeds `--tolerance`, so you can choose a
+timestep on the desktop instead of on the bench.
+
+### How generated code is checked
+
+The test suite compiles every `c_header` output with
+`gcc -std=c99 -Wall -Wextra -Werror -pedantic`, runs 1000 RK4 steps, and
+compares the state with a Python RK4 reference (double precision to 1e-12,
+float to 1e-4). Rust expressions are evaluated numerically against SymPy, and
+the crate is built with `cargo test` in CI where a Rust toolchain exists.
 
 ---
 
